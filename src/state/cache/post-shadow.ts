@@ -34,19 +34,28 @@ const shadows: WeakMap<
   Partial<PostShadow>
 > = new WeakMap()
 
+/*
+ * URI-based shadow storage for post_threads_v2 compatibility.
+ * V2's insertReplies creates new Post references that break WeakMap lookups.
+ * This Map uses post URIs as keys to provide a stable fallback.
+ */
+const uriShadows: Map<string, Partial<PostShadow>> = new Map()
+
 export function usePostShadow(
   post: AppBskyFeedDefs.PostView,
 ): Shadow<AppBskyFeedDefs.PostView> | typeof POST_TOMBSTONE {
-  const [shadow, setShadow] = useState(() => shadows.get(post))
+  const [shadow, setShadow] = useState(
+    () => shadows.get(post) || uriShadows.get(post.uri),
+  )
   const [prevPost, setPrevPost] = useState(post)
   if (post !== prevPost) {
     setPrevPost(post)
-    setShadow(shadows.get(post))
+    setShadow(shadows.get(post) || uriShadows.get(post.uri))
   }
 
   useEffect(() => {
     function onUpdate() {
-      setShadow(shadows.get(post))
+      setShadow(shadows.get(post) || uriShadows.get(post.uri))
     }
     emitter.addListener(post.uri, onUpdate)
     return () => {
@@ -130,6 +139,11 @@ export function updatePostShadow(
   for (let post of cachedPosts) {
     shadows.set(post, {...shadows.get(post), ...value})
   }
+  /*
+   * Also update URI-based shadow for post_threads_v2 compatibility.
+   * This ensures shadow state persists even when V2 creates new Post references.
+   */
+  uriShadows.set(uri, {...uriShadows.get(uri), ...value})
   batchedUpdates(() => {
     emitter.emit(uri)
   })
