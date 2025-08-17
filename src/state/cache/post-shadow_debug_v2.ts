@@ -1,0 +1,278 @@
+import {useEffect, useMemo, useState} from 'react'
+import {
+  AppBskyEmbedRecord,
+  AppBskyEmbedRecordWithMedia,
+  type AppBskyFeedDefs,
+} from '@atproto/api'
+import {type QueryClient} from '@tanstack/react-query'
+import EventEmitter from 'eventemitter3'
+
+import {batchedUpdates} from '#/lib/batchedUpdates'
+import {findAllPostsInQueryData as findAllPostsInExploreFeedPreviewsQueryData} from '#/state/queries/explore-feed-previews'
+import {findAllPostsInQueryData as findAllPostsInNotifsQueryData} from '#/state/queries/notifications/feed'
+import {findAllPostsInQueryData as findAllPostsInFeedQueryData} from '#/state/queries/post-feed'
+import {findAllPostsInQueryData as findAllPostsInQuoteQueryData} from '#/state/queries/post-quotes'
+import {findAllPostsInQueryData as findAllPostsInThreadQueryData} from '#/state/queries/post-thread'
+import {findAllPostsInQueryData as findAllPostsInSearchQueryData} from '#/state/queries/search-posts'
+import {findAllPostsInQueryData as findAllPostsInThreadV2QueryData} from '#/state/queries/usePostThread/queryCache'
+import {castAsShadow, type Shadow} from './types'
+export type {Shadow} from './types'
+
+export interface PostShadow {
+  likeUri: string | undefined
+  repostUri: string | undefined
+  isDeleted: boolean
+  embed: AppBskyEmbedRecord.View | AppBskyEmbedRecordWithMedia.View | undefined
+  pinned: boolean
+}
+
+export const POST_TOMBSTONE = Symbol('PostTombstone')
+
+const emitter = new EventEmitter()
+// Create original WeakMap
+const originalShadows: WeakMap<
+  AppBskyFeedDefs.PostView,
+  Partial<PostShadow>
+> = new WeakMap()
+
+// Proxy for minimal monitoring
+const shadows = new Proxy(originalShadows, {
+  get(target, prop) {
+    const result = (target as any)[prop]
+    if (prop === 'set' || prop === 'get') {
+      return function (...args: any[]) {
+        const outcome = result.apply(target, args)
+        const stack = new Error().stack?.split('\n')[2]?.trim() || 'unknown'
+        const caller = stack.split('(')[0]?.replace('at ', '') || 'unknown'
+        const action = prop === 'get' ? 'GET' : 'SET'
+        const resultDescription =
+          prop === 'get'
+            ? outcome
+              ? 'SHADOW_FOUND'
+              : 'SHADOW_NOT_FOUND'
+            : 'SHADOW_STORED'
+        // Output to Metro console for debugging
+        console.log(
+          `[V2 WeakMap] ${action}`,
+          `(rkey:${args.map(a => a?.uri?.split('/').pop() || typeof a)})`,
+          `called from: ${caller}`,
+          `→ ${resultDescription}`,
+        )
+        return outcome
+      }
+    }
+    return result
+  },
+})
+
+/*
+ * URI-based shadow storage for post_threads_v2 compatibility.
+ * V2's insertReplies creates new Post references that break WeakMap lookups.
+ * This Map uses post URIs as keys to provide a stable fallback.
+ */
+const originalUriShadows: Map<string, Partial<PostShadow>> = new Map()
+
+// Proxy for URI Map monitoring
+const uriShadows = new Proxy(originalUriShadows, {
+  get(target, prop) {
+    const result = (target as any)[prop]
+    if (prop === 'set' || prop === 'get') {
+      return function (...args: any[]) {
+        const outcome = result.apply(target, args)
+        const stack = new Error().stack?.split('\n')[2]?.trim() || 'unknown'
+        const caller = stack.split('(')[0]?.replace('at ', '') || 'unknown'
+        const action = prop === 'get' ? 'GET' : 'SET'
+        const resultDescription =
+          prop === 'get'
+            ? outcome
+              ? 'SHADOW_FOUND'
+              : 'SHADOW_NOT_FOUND'
+            : 'SHADOW_STORED'
+        // Output to Metro console for debugging
+        console.log(
+          `[V2 URI Map] ${action}`,
+          `(rkey:${args[0]?.split('/').pop() || args[0]})`,
+          `called from: ${caller}`,
+          `→ ${resultDescription}`,
+        )
+        return outcome
+      }
+    }
+    return result
+  },
+})
+
+export function usePostShadow(
+  post: AppBskyFeedDefs.PostView,
+): Shadow<AppBskyFeedDefs.PostView> | typeof POST_TOMBSTONE {
+  const [shadow, setShadow] = useState(() => {
+    const weakMapShadow = shadows.get(post)
+    const uriShadow = uriShadows.get(post.uri)
+    const finalShadow = weakMapShadow || uriShadow
+    console.log(
+      `[V2 Shadow State] INIT`,
+      `(rkey:${post.uri?.split('/').pop()})`,
+      `called from: usePostShadow`,
+      `reactQueryLike: ${post.viewer?.like ? 'LIKE_FOUND_IN_CACHE' : 'NO_LIKE_FOUND'}`,
+      `shadowStrategy: ${weakMapShadow ? 'WEAKMAP' : uriShadow ? 'URI_FALLBACK' : 'NONE'}`,
+      `weakMapStatus: ${weakMapShadow ? 'HAS_SHADOW' : 'EMPTY'}`,
+      `uriMapStatus: ${uriShadow ? 'HAS_SHADOW' : 'EMPTY'}`,
+    )
+    return finalShadow
+  })
+  const [prevPost, setPrevPost] = useState(post)
+  if (post !== prevPost) {
+    setPrevPost(post)
+    const weakMapShadow = shadows.get(post)
+    const uriShadow = uriShadows.get(post.uri)
+    const finalShadow = weakMapShadow || uriShadow
+    console.log(
+      `[V2 Shadow State] REF_CHANGE`,
+      `(rkey:${post.uri?.split('/').pop()})`,
+      `called from: usePostShadow`,
+      `reactQueryLike: ${post.viewer?.like ? 'LIKE_FOUND_IN_CACHE' : 'NO_LIKE_FOUND'}`,
+      `shadowStrategy: ${weakMapShadow ? 'WEAKMAP' : uriShadow ? 'URI_FALLBACK' : post.viewer?.like ? 'REACT_QUERY' : 'LOST'}`,
+      `weakMapStatus: ${weakMapShadow ? 'HAS_SHADOW' : 'LOST_REFERENCE'}`,
+      `uriMapStatus: ${uriShadow ? 'HAS_SHADOW' : 'EMPTY'}`,
+    )
+    setShadow(finalShadow)
+  }
+
+  useEffect(() => {
+    function onUpdate() {
+      const weakMapShadow = shadows.get(post)
+      const uriShadow = uriShadows.get(post.uri)
+      const finalShadow = weakMapShadow || uriShadow
+      console.log(
+        `[V2 Shadow State] UPDATE`,
+        `(rkey:${post.uri?.split('/').pop()})`,
+        `called from: onUpdate`,
+        `reactQueryLike: ${post.viewer?.like ? 'LIKE_FOUND_IN_CACHE' : 'NO_LIKE_FOUND'}`,
+        `shadowStrategy: ${weakMapShadow ? 'WEAKMAP' : uriShadow ? 'URI_FALLBACK' : post.viewer?.like ? 'REACT_QUERY' : 'LOST'}`,
+        `weakMapStatus: ${weakMapShadow ? 'HAS_SHADOW' : 'EMPTY'}`,
+        `uriMapStatus: ${uriShadow ? 'HAS_SHADOW' : 'EMPTY'}`,
+      )
+      setShadow(finalShadow)
+    }
+    emitter.addListener(post.uri, onUpdate)
+    return () => {
+      emitter.removeListener(post.uri, onUpdate)
+    }
+  }, [post, setShadow])
+
+  return useMemo(() => {
+    if (shadow) {
+      return mergeShadow(post, shadow)
+    } else {
+      return castAsShadow(post)
+    }
+  }, [post, shadow])
+}
+function mergeShadow(
+  post: AppBskyFeedDefs.PostView,
+  shadow: Partial<PostShadow>,
+): Shadow<AppBskyFeedDefs.PostView> | typeof POST_TOMBSTONE {
+  if (shadow.isDeleted) {
+    return POST_TOMBSTONE
+  }
+
+  let likeCount = post.likeCount ?? 0
+  if ('likeUri' in shadow) {
+    const wasLiked = !!post.viewer?.like
+    const isLiked = !!shadow.likeUri
+    if (wasLiked && !isLiked) {
+      likeCount--
+    } else if (!wasLiked && isLiked) {
+      likeCount++
+    }
+    likeCount = Math.max(0, likeCount)
+  }
+
+  let repostCount = post.repostCount ?? 0
+  if ('repostUri' in shadow) {
+    const wasReposted = !!post.viewer?.repost
+    const isReposted = !!shadow.repostUri
+    if (wasReposted && !isReposted) {
+      repostCount--
+    } else if (!wasReposted && isReposted) {
+      repostCount++
+    }
+    repostCount = Math.max(0, repostCount)
+  }
+
+  let embed: typeof post.embed
+  if ('embed' in shadow) {
+    if (
+      (AppBskyEmbedRecord.isView(post.embed) &&
+        AppBskyEmbedRecord.isView(shadow.embed)) ||
+      (AppBskyEmbedRecordWithMedia.isView(post.embed) &&
+        AppBskyEmbedRecordWithMedia.isView(shadow.embed))
+    ) {
+      embed = shadow.embed
+    }
+  }
+
+  return castAsShadow({
+    ...post,
+    embed: embed || post.embed,
+    likeCount: likeCount,
+    repostCount: repostCount,
+    viewer: {
+      ...(post.viewer || {}),
+      like: 'likeUri' in shadow ? shadow.likeUri : post.viewer?.like,
+      repost: 'repostUri' in shadow ? shadow.repostUri : post.viewer?.repost,
+      pinned: 'pinned' in shadow ? shadow.pinned : post.viewer?.pinned,
+    },
+  })
+}
+
+export function updatePostShadow(
+  queryClient: QueryClient,
+  uri: string,
+  value: Partial<PostShadow>,
+) {
+  const cachedPosts = findPostsInCache(queryClient, uri)
+  for (let post of cachedPosts) {
+    shadows.set(post, {...shadows.get(post), ...value})
+  }
+  /*
+   * Also update URI-based shadow for post_threads_v2 compatibility.
+   * This ensures shadow state persists even when V2 creates new Post references.
+   */
+  uriShadows.set(uri, {...uriShadows.get(uri), ...value})
+  batchedUpdates(() => {
+    emitter.emit(uri)
+  })
+}
+
+function* findPostsInCache(
+  queryClient: QueryClient,
+  uri: string,
+): Generator<AppBskyFeedDefs.PostView, void> {
+  for (let post of findAllPostsInFeedQueryData(queryClient, uri)) {
+    yield post
+  }
+  for (let post of findAllPostsInNotifsQueryData(queryClient, uri)) {
+    yield post
+  }
+  for (let node of findAllPostsInThreadQueryData(queryClient, uri)) {
+    if (node.type === 'post') {
+      yield node.post
+    }
+  }
+  for (let post of findAllPostsInThreadV2QueryData(queryClient, uri)) {
+    yield post
+  }
+  for (let post of findAllPostsInSearchQueryData(queryClient, uri)) {
+    yield post
+  }
+  for (let post of findAllPostsInQuoteQueryData(queryClient, uri)) {
+    yield post
+  }
+  for (let post of findAllPostsInExploreFeedPreviewsQueryData(
+    queryClient,
+    uri,
+  )) {
+    yield post
+  }
+}
