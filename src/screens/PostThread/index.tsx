@@ -7,14 +7,18 @@ import {useInitialNumToRender} from '#/lib/hooks/useInitialNumToRender'
 import {useOpenComposer} from '#/lib/hooks/useOpenComposer'
 import {useFeedFeedback} from '#/state/feed-feedback'
 import {type ThreadViewOption} from '#/state/queries/preferences/useThreadPreferences'
-import {type ThreadItem, usePostThread} from '#/state/queries/usePostThread'
+import {
+  PostThreadContextProvider,
+  type ThreadItem,
+  usePostThread,
+} from '#/state/queries/usePostThread'
 import {useSession} from '#/state/session'
 import {type OnPostSuccessData} from '#/state/shell/composer'
 import {useShellLayout} from '#/state/shell/shell-layout'
 import {useUnstablePostSource} from '#/state/unstable-post-source'
-import {PostThreadComposePrompt} from '#/view/com/post-thread/PostThreadComposePrompt'
 import {List, type ListMethods} from '#/view/com/util/List'
 import {HeaderDropdown} from '#/screens/PostThread/components/HeaderDropdown'
+import {ThreadComposePrompt} from '#/screens/PostThread/components/ThreadComposePrompt'
 import {ThreadError} from '#/screens/PostThread/components/ThreadError'
 import {
   ThreadItemAnchor,
@@ -48,7 +52,10 @@ export function PostThread({uri}: {uri: string}) {
   const initialNumToRender = useInitialNumToRender()
   const {height: windowHeight} = useWindowDimensions()
   const anchorPostSource = useUnstablePostSource(uri)
-  const feedFeedback = useFeedFeedback(anchorPostSource?.feed, hasSession)
+  const feedFeedback = useFeedFeedback(
+    anchorPostSource?.feedSourceInfo,
+    hasSession,
+  )
 
   /*
    * One query to rule them all
@@ -144,7 +151,9 @@ export function PostThread({uri}: {uri: string}) {
    */
   const shouldHandleScroll = useRef(true)
   /**
-   * Called any time the content size of the list changes, _just_ before paint.
+   * Called any time the content size of the list changes. Could be a fresh
+   * render, items being added to the list, or any resize that changes the
+   * scrollable size of the content.
    *
    * We want this to fire every time we change params (which will reset
    * `deferParents` via `onLayout` on the anchor post, due to the key change),
@@ -189,24 +198,23 @@ export function PostThread({uri}: {uri: string}) {
        * will give us a _positive_ offset, which will scroll the anchor post
        * back _up_ to the top of the screen.
        */
-      list.scrollToOffset({
-        offset: anchorOffsetTop - headerHeight,
-      })
+      const offset = anchorOffsetTop - headerHeight
+      list.scrollToOffset({offset})
 
       /*
-       * After the second pass, `deferParents` will be `false`, and we need
-       * to ensure this doesn't run again until scroll handling is requested
-       * again via `shouldHandleScroll.current === true` and a params
-       * change via `prepareForParamsUpdate`.
+       * After we manage to do a positive adjustment, we need to ensure this
+       * doesn't run again until scroll handling is requested again via
+       * `shouldHandleScroll.current === true` and a params change via
+       * `prepareForParamsUpdate`.
        *
        * The `isRoot` here is needed because if we're looking at the anchor
        * post, this handler will not fire after `deferParents` is set to
        * `false`, since there are no parents to render above it. In this case,
-       * we want to make sure `shouldHandleScroll` is set to `false` so that
-       * subsequent size changes unrelated to a params change (like pagination)
-       * do not affect scroll.
+       * we want to make sure `shouldHandleScroll` is set to `false` right away
+       * so that subsequent size changes unrelated to a params change (like
+       * pagination) do not affect scroll.
        */
-      if (!deferParents || isRoot) shouldHandleScroll.current = false
+      if (offset > 0 || isRoot) shouldHandleScroll.current = false
     }
   })
 
@@ -455,7 +463,7 @@ export function PostThread({uri}: {uri: string}) {
         return (
           <View>
             {gtMobile && (
-              <PostThreadComposePrompt onPressCompose={onReplyToAnchor} />
+              <ThreadComposePrompt onPressCompose={onReplyToAnchor} />
             )}
           </View>
         )
@@ -488,7 +496,7 @@ export function PostThread({uri}: {uri: string}) {
   const defaultListFooterHeight = hasParents ? windowHeight - 200 : undefined
 
   return (
-    <>
+    <PostThreadContextProvider context={thread.context}>
       <Layout.Header.Outer headerRef={headerRef}>
         <Layout.Header.BackButton />
         <Layout.Header.Content>
@@ -571,7 +579,7 @@ export function PostThread({uri}: {uri: string}) {
       {!gtMobile && canReply && hasSession && (
         <MobileComposePrompt onPressReply={onReplyToAnchor} />
       )}
-    </>
+    </PostThreadContextProvider>
   )
 }
 
@@ -586,7 +594,7 @@ function MobileComposePrompt({onPressReply}: {onPressReply: () => unknown}) {
 
   return (
     <Animated.View style={[a.fixed, a.left_0, a.right_0, animatedStyle]}>
-      <PostThreadComposePrompt onPressCompose={onPressReply} />
+      <ThreadComposePrompt onPressCompose={onPressReply} />
     </Animated.View>
   )
 }

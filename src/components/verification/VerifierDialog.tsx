@@ -89,7 +89,8 @@ function Inner({
         </View>
 
         <View style={[a.gap_sm]}>
-          <Text style={[a.text_2xl, a.font_bold, a.pr_4xl, a.leading_tight]}>
+          <Text
+            style={[a.text_2xl, a.font_semi_bold, a.pr_4xl, a.leading_tight]}>
             {label}
           </Text>
           <Text style={[a.text_md, a.leading_snug]}>
@@ -114,7 +115,12 @@ function Inner({
           <Link
             overridePresentation
             to={urls.website.blog.initialVerificationAnnouncement}
-            label={_(msg`Learn more about verification on Bluesky`)}
+            label={_(
+              msg({
+                message: `Learn more about verification on Bluesky`,
+                context: `english-only-resource`,
+              }),
+            )}
             size="small"
             variant="solid"
             color="primary"
@@ -129,7 +135,7 @@ function Inner({
               )
             }}>
             <ButtonText>
-              <Trans>Learn more</Trans>
+              <Trans context="english-only-resource">Learn more</Trans>
             </ButtonText>
           </Link>
           <Button

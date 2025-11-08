@@ -234,7 +234,7 @@ export function ProfileFeedHeader({info}: {info: FeedSourceFeedInfo}) {
                       <Text
                         style={[
                           a.text_md,
-                          a.font_heavy,
+                          a.font_bold,
                           a.leading_tight,
                           gtMobile && a.text_lg,
                         ]}
@@ -441,7 +441,7 @@ function DialogInner({
 
         <View style={[a.flex_1, a.gap_2xs]}>
           <Text
-            style={[a.text_2xl, a.font_heavy, a.leading_tight]}
+            style={[a.text_2xl, a.font_bold, a.leading_tight]}
             numberOfLines={2}>
             {info.displayName}
           </Text>
@@ -481,7 +481,7 @@ function DialogInner({
         </Button>
       </View>
 
-      <RichText value={rt} style={[a.text_md, a.leading_snug]} />
+      <RichText value={rt} style={[a.text_md]} />
 
       <View style={[a.flex_row, a.gap_sm, a.align_center]}>
         {typeof likeCount === 'number' && (

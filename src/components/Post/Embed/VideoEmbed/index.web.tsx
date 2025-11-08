@@ -10,12 +10,11 @@ import {View} from 'react-native'
 import {type AppBskyEmbedVideo} from '@atproto/api'
 import {msg} from '@lingui/macro'
 import {useLingui} from '@lingui/react'
-import type React from 'react'
 
 import {isFirefox} from '#/lib/browser'
 import {ErrorBoundary} from '#/view/com/util/ErrorBoundary'
 import {ConstrainedImage} from '#/view/com/util/images/AutoSizedImage'
-import {atoms as a} from '#/alf'
+import {atoms as a, useTheme} from '#/alf'
 import {useIsWithinMessage} from '#/components/dms/MessageContext'
 import {useFullscreen} from '#/components/hooks/useFullscreen'
 import {
@@ -33,12 +32,13 @@ export function VideoEmbed({
   embed: AppBskyEmbedVideo.View
   crop?: 'none' | 'square' | 'constrained'
 }) {
+  const t = useTheme()
   const ref = useRef<HTMLDivElement>(null)
   const {active, setActive, sendPosition, currentActiveView} =
     useActiveVideoWeb()
   const [onScreen, setOnScreen] = useState(false)
   const [isFullscreen] = useFullscreen()
-  const lastKnownTime = useRef<number | undefined>()
+  const lastKnownTime = useRef<number | undefined>(undefined)
 
   useEffect(() => {
     if (!ref.current) return
@@ -87,7 +87,13 @@ export function VideoEmbed({
   const contents = (
     <div
       ref={ref}
-      style={{display: 'flex', flex: 1, cursor: 'default'}}
+      style={{
+        display: 'flex',
+        flex: 1,
+        cursor: 'default',
+        backgroundImage: `url(${embed.thumbnail})`,
+        backgroundSize: 'cover',
+      }}
       onClick={evt => evt.stopPropagation()}>
       <ErrorBoundary renderError={renderError} key={key}>
         <OnlyNearScreen>
@@ -109,13 +115,24 @@ export function VideoEmbed({
         sendPosition={sendPosition}
         isAnyViewActive={currentActiveView !== null}>
         {cropDisabled ? (
-          <View style={[a.w_full, a.overflow_hidden, {aspectRatio: max ?? 1}]}>
+          <View
+            style={[
+              a.w_full,
+              a.overflow_hidden,
+              {aspectRatio: max ?? 1},
+              a.rounded_md,
+              a.overflow_hidden,
+              t.atoms.bg_contrast_25,
+            ]}>
             {contents}
           </View>
         ) : (
           <ConstrainedImage
             fullBleed={crop === 'square'}
-            aspectRatio={constrained || 1}>
+            aspectRatio={constrained || 1}
+            // slightly smaller max height than images
+            // images use 16 / 9, for reference
+            minMobileAspectRatio={14 / 9}>
             {contents}
           </ConstrainedImage>
         )}

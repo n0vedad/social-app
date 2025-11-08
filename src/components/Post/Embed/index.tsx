@@ -23,7 +23,7 @@ import {ContentHider} from '#/components/moderation/ContentHider'
 import {PostAlerts} from '#/components/moderation/PostAlerts'
 import {RichText} from '#/components/RichText'
 import {Embed as StarterPackCard} from '#/components/StarterPack/StarterPackCard'
-import {SubtleWebHover} from '#/components/SubtleWebHover'
+import {SubtleHover} from '#/components/SubtleHover'
 import * as bsky from '#/types/bsky'
 import {
   type Embed as TEmbed,
@@ -87,14 +87,18 @@ function MediaEmbed({
   switch (embed.type) {
     case 'images': {
       return (
-        <ContentHider modui={rest.moderation?.ui('contentMedia')}>
+        <ContentHider
+          modui={rest.moderation?.ui('contentMedia')}
+          activeStyle={[a.mt_sm]}>
           <ImageEmbed embed={embed} {...rest} />
         </ContentHider>
       )
     }
     case 'link': {
       return (
-        <ContentHider modui={rest.moderation?.ui('contentMedia')}>
+        <ContentHider
+          modui={rest.moderation?.ui('contentMedia')}
+          activeStyle={[a.mt_sm]}>
           <ExternalEmbed
             link={embed.view.external}
             onOpen={rest.onOpen}
@@ -105,8 +109,10 @@ function MediaEmbed({
     }
     case 'video': {
       return (
-        <ContentHider modui={rest.moderation?.ui('contentMedia')}>
-          <VideoEmbed embed={embed.view} />
+        <ContentHider
+          modui={rest.moderation?.ui('contentMedia')}
+          activeStyle={[a.mt_sm]}>
+          <VideoEmbed embed={embed.view} crop="constrained" />
         </ContentHider>
       )
     }
@@ -278,7 +284,7 @@ export function QuoteEmbed({
         childContainerStyle={[a.pt_sm]}>
         {({active}) => (
           <>
-            {!active && <SubtleWebHover hover={hover} style={[a.rounded_md]} />}
+            {!active && <SubtleHover hover={hover} style={[a.rounded_md]} />}
             <Link
               style={[!active && a.p_md]}
               hoverStyle={{borderColor: pal.colors.borderLinkHover}}

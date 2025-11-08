@@ -1,4 +1,4 @@
-import {useCallback} from 'react'
+import {type JSX, useCallback} from 'react'
 import {type GestureResponderEvent, View} from 'react-native'
 import Animated from 'react-native-reanimated'
 import {useSafeAreaInsets} from 'react-native-safe-area-context'
@@ -405,7 +405,9 @@ function Btn({
       accessible={accessible}
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
-      targetScale={0.8}>
+      targetScale={0.8}
+      accessibilityLargeContentTitle={accessibilityLabel}
+      accessibilityShowsLargeContentViewer>
       {icon}
       {notificationCount ? (
         <View style={[styles.notificationCount, a.rounded_full]}>

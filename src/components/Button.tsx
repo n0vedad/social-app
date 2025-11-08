@@ -7,7 +7,6 @@ import {
   Pressable,
   type PressableProps,
   type StyleProp,
-  StyleSheet,
   type TargetedEvent,
   type TextProps,
   type TextStyle,
@@ -71,8 +70,8 @@ export type ButtonState = {
 export type ButtonContext = VariantProps & ButtonState
 
 type NonTextElements =
-  | React.ReactElement
-  | Iterable<React.ReactElement | null | undefined | boolean>
+  | React.ReactElement<any>
+  | Iterable<React.ReactElement<any> | null | undefined | boolean>
 
 export type ButtonProps = Pick<
   PressableProps,
@@ -240,7 +239,7 @@ export const Button = React.forwardRef<View, ButtonProps>(
           }
         } else if (color === 'secondary') {
           if (!disabled) {
-            baseStyles.push(t.atoms.bg_contrast_25)
+            baseStyles.push(t.atoms.bg_contrast_50)
             hoverStyles.push(t.atoms.bg_contrast_100)
           } else {
             baseStyles.push(t.atoms.bg_contrast_50)
@@ -274,51 +273,27 @@ export const Button = React.forwardRef<View, ButtonProps>(
         } else if (color === 'primary_subtle') {
           if (!disabled) {
             baseStyles.push({
-              backgroundColor: select(t.name, {
-                light: t.palette.primary_50,
-                dim: t.palette.primary_100,
-                dark: t.palette.primary_100,
-              }),
+              backgroundColor: t.palette.primary_50,
             })
             hoverStyles.push({
-              backgroundColor: select(t.name, {
-                light: t.palette.primary_100,
-                dim: t.palette.primary_200,
-                dark: t.palette.primary_200,
-              }),
+              backgroundColor: t.palette.primary_100,
             })
           } else {
             baseStyles.push({
-              backgroundColor: select(t.name, {
-                light: t.palette.primary_25,
-                dim: t.palette.primary_50,
-                dark: t.palette.primary_50,
-              }),
+              backgroundColor: t.palette.primary_50,
             })
           }
         } else if (color === 'negative_subtle') {
           if (!disabled) {
             baseStyles.push({
-              backgroundColor: select(t.name, {
-                light: t.palette.negative_50,
-                dim: t.palette.negative_100,
-                dark: t.palette.negative_100,
-              }),
+              backgroundColor: t.palette.negative_50,
             })
             hoverStyles.push({
-              backgroundColor: select(t.name, {
-                light: t.palette.negative_100,
-                dim: t.palette.negative_200,
-                dark: t.palette.negative_200,
-              }),
+              backgroundColor: t.palette.negative_100,
             })
           } else {
             baseStyles.push({
-              backgroundColor: select(t.name, {
-                light: t.palette.negative_25,
-                dim: t.palette.negative_50,
-                dark: t.palette.negative_50,
-              }),
+              backgroundColor: t.palette.negative_50,
             })
           }
         }
@@ -372,7 +347,7 @@ export const Button = React.forwardRef<View, ButtonProps>(
             if (!disabled) {
               baseStyles.push(t.atoms.bg)
               hoverStyles.push({
-                backgroundColor: t.palette.contrast_25,
+                backgroundColor: t.palette.contrast_50,
               })
             }
           }
@@ -396,7 +371,7 @@ export const Button = React.forwardRef<View, ButtonProps>(
             if (!disabled) {
               baseStyles.push(t.atoms.bg)
               hoverStyles.push({
-                backgroundColor: t.palette.contrast_25,
+                backgroundColor: t.palette.contrast_50,
               })
             }
           }
@@ -536,8 +511,6 @@ export const Button = React.forwardRef<View, ButtonProps>(
       [state, variant, color, size, disabled],
     )
 
-    const flattenedBaseStyles = flatten([baseStyles, style])
-
     return (
       <PressableComponent
         role="button"
@@ -557,9 +530,10 @@ export const Button = React.forwardRef<View, ButtonProps>(
           a.align_center,
           a.justify_center,
           a.curve_continuous,
-          flattenedBaseStyles,
+          baseStyles,
+          style,
           ...(state.hovered || state.pressed
-            ? [hoverStyles, flatten(hoverStyleProp)]
+            ? [hoverStyles, hoverStyleProp]
             : []),
         ]}
         onPressIn={onPressIn}
@@ -626,37 +600,21 @@ export function useSharedButtonTextStyles() {
       } else if (color === 'primary_subtle') {
         if (!disabled) {
           baseStyles.push({
-            color: select(t.name, {
-              light: t.palette.primary_600,
-              dim: t.palette.primary_800,
-              dark: t.palette.primary_800,
-            }),
+            color: t.palette.primary_600,
           })
         } else {
           baseStyles.push({
-            color: select(t.name, {
-              light: t.palette.primary_200,
-              dim: t.palette.primary_200,
-              dark: t.palette.primary_200,
-            }),
+            color: t.palette.primary_200,
           })
         }
       } else if (color === 'negative_subtle') {
         if (!disabled) {
           baseStyles.push({
-            color: select(t.name, {
-              light: t.palette.negative_600,
-              dim: t.palette.negative_800,
-              dark: t.palette.negative_800,
-            }),
+            color: t.palette.negative_600,
           })
         } else {
           baseStyles.push({
-            color: select(t.name, {
-              light: t.palette.negative_200,
-              dim: t.palette.negative_200,
-              dark: t.palette.negative_200,
-            }),
+            color: t.palette.negative_200,
           })
         }
       }
@@ -763,10 +721,10 @@ export function useSharedButtonTextStyles() {
     } else if (size === 'small') {
       baseStyles.push(a.text_sm, a.leading_snug, a.font_medium)
     } else if (size === 'tiny') {
-      baseStyles.push(a.text_xs, a.leading_snug, a.font_medium)
+      baseStyles.push(a.text_xs, a.leading_snug, a.font_semi_bold)
     }
 
-    return StyleSheet.flatten(baseStyles)
+    return flatten(baseStyles)
   }, [t, variant, color, size, disabled])
 }
 
@@ -875,5 +833,49 @@ export function ButtonIcon({
         />
       </View>
     </View>
+  )
+}
+
+export type StackedButtonProps = Omit<
+  ButtonProps,
+  keyof VariantProps | 'children'
+> &
+  Pick<VariantProps, 'color'> & {
+    children: React.ReactNode
+    icon: React.ComponentType<SVGIconProps>
+  }
+
+export function StackedButton({children, ...props}: StackedButtonProps) {
+  return (
+    <Button
+      {...props}
+      size="tiny"
+      style={[
+        a.flex_col,
+        {
+          height: 72,
+          paddingHorizontal: 16,
+          borderRadius: 20,
+          gap: 4,
+        },
+        props.style,
+      ]}>
+      <StackedButtonInnerText icon={props.icon}>
+        {children}
+      </StackedButtonInnerText>
+    </Button>
+  )
+}
+
+function StackedButtonInnerText({
+  children,
+  icon: Icon,
+}: Pick<StackedButtonProps, 'icon' | 'children'>) {
+  const textStyles = useSharedButtonTextStyles()
+  return (
+    <>
+      <Icon width={24} fill={textStyles.color} />
+      <ButtonText>{children}</ButtonText>
+    </>
   )
 }
