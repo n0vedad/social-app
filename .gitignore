@@ -124,3 +124,12 @@ bskyogcard/src/assets/fonts/noto-*
 bskyweb/static/media/*.webp
 bskyweb/static/media/*.jpg
 bskyweb/static/media/*.png
+
+# Local development repositories
+/atproto/
+/feed-generator/
+/slices/
+/supercell/
+
+# Debug files
+*_debug_official.ts
