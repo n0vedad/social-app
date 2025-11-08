@@ -4,6 +4,7 @@ import {
   type AppBskyFeedDefs,
   AppBskyFeedPost,
   AtUri,
+  hasMutedWord,
   moderatePost,
   type ModerationDecision,
   RichText as RichTextAPI,
@@ -74,6 +75,75 @@ export function Post({
     () => (moderationOpts ? moderatePost(post, moderationOpts) : undefined),
     [moderationOpts, post],
   )
+  // Debug: log when a post is hidden/blurred due to a muted word/tag in the single Post component
+  try {
+    if (moderation && moderation.causes.some(c => c.type === 'mute-word')) {
+      const rec: any = record
+      const langs = rec?.langs
+      const text = rec?.text
+      const facets = rec?.facets
+      const tags = rec?.tags
+      // Collect ALT text from image embeds
+      let altText = ''
+      try {
+        const emb: any = rec?.embed
+        if (emb && emb.$type === 'app.bsky.embed.images') {
+          const imgs: any[] = Array.isArray(emb.images) ? emb.images : []
+          altText = imgs
+            .map(img => (img && img.alt) || '')
+            .filter(Boolean)
+            .join(' \n ')
+        }
+      } catch {}
+      const mutedWords = moderationOpts?.prefs.mutedWords || []
+      const matchedWords: Array<{
+        value: string
+        targets: string[]
+        actorTarget?: string
+        expiresAt?: string
+      }> = []
+      for (const w of mutedWords) {
+        try {
+          const hit =
+            hasMutedWord({
+              mutedWords: [w],
+              text,
+              facets,
+              outlineTags: tags,
+              languages: langs,
+              actor: post.author,
+            }) ||
+            (altText
+              ? hasMutedWord({
+                  mutedWords: [w],
+                  text: altText,
+                  languages: langs,
+                  actor: post.author,
+                })
+              : false)
+          if (hit) {
+            matchedWords.push({
+              value: (w as any).value,
+              targets: (w as any).targets || [],
+              actorTarget: (w as any).actorTarget,
+              expiresAt: (w as any).expiresAt,
+            })
+          }
+        } catch {}
+      }
+
+      console.debug('[mute-word][post]', {
+        uri: post.uri,
+        author: {did: post.author.did, handle: (post.author as any).handle},
+        langs,
+        matchedWords,
+        text,
+        facets,
+        tags,
+        altText,
+      })
+    }
+  } catch {}
   if (postShadowed === POST_TOMBSTONE) {
     return null
   }

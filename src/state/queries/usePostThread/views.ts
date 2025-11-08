@@ -5,6 +5,7 @@ import {
   type AppBskyUnspeccedDefs,
   type AppBskyUnspeccedGetPostThreadV2,
   AtUri,
+  hasMutedWord,
   moderatePost,
   type ModerationOpts,
 } from '@atproto/api'
@@ -74,6 +75,80 @@ export function threadPost({
   threadgateHiddenReplies: Set<string>
 }): Extract<ThreadItem, {type: 'threadPost'}> {
   const moderation = moderatePost(value.post, moderationOpts)
+  // Debug: log detailed info when a muted word/tag causes blur/filter in thread view
+  try {
+    if (moderation.causes.some(c => c.type === 'mute-word')) {
+      const rec: any =
+        (value as any)?.post?.record ?? (value as any)?.post?.value
+      const langs = rec?.langs
+      const text = rec?.text
+      const facets = rec?.facets
+      const tags = rec?.tags
+      // Collect ALT text from image embeds on the record
+      let altText = ''
+      try {
+        const emb: any = rec?.embed
+        if (emb && emb.$type === 'app.bsky.embed.images') {
+          const imgs: any[] = Array.isArray(emb.images) ? emb.images : []
+          altText = imgs
+            .map(img => (img && img.alt) || '')
+            .filter(Boolean)
+            .join(' \n ')
+        }
+      } catch {}
+
+      const mutedWords = moderationOpts.prefs.mutedWords || []
+      const matchedWords: Array<{
+        value: string
+        targets: string[]
+        actorTarget?: string
+        expiresAt?: string
+      }> = []
+      for (const w of mutedWords) {
+        try {
+          const hit =
+            hasMutedWord({
+              mutedWords: [w],
+              text,
+              facets,
+              outlineTags: tags,
+              languages: langs,
+              actor: value.post.author,
+            }) ||
+            (altText
+              ? hasMutedWord({
+                  mutedWords: [w],
+                  text: altText,
+                  languages: langs,
+                  actor: value.post.author,
+                })
+              : false)
+          if (hit) {
+            matchedWords.push({
+              value: (w as any).value,
+              targets: (w as any).targets || [],
+              actorTarget: (w as any).actorTarget,
+              expiresAt: (w as any).expiresAt,
+            })
+          }
+        } catch {}
+      }
+
+      console.debug('[mute-word][thread]', {
+        uri,
+        author: {
+          did: value.post.author.did,
+          handle: (value.post.author as any).handle,
+        },
+        langs,
+        matchedWords,
+        text,
+        facets,
+        tags,
+        altText,
+      })
+    }
+  } catch {}
   const modui = moderation.ui('contentList')
   const blurred = modui.blur || modui.filter
   const muted = (modui.blurs[0] || modui.filters[0])?.type === 'muted'

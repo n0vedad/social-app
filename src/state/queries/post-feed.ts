@@ -6,6 +6,7 @@ import {
   type AppBskyFeedPost,
   AtUri,
   type BskyAgent,
+  hasMutedWord,
   moderatePost,
   type ModerationDecision,
   type ModerationPrefs,
@@ -292,9 +293,87 @@ export function usePostFeedQuery(
               slices: tuner
                 .tune(page.feed)
                 .map(slice => {
-                  const moderations = slice.items.map(item =>
-                    moderatePost(item.post, moderationOpts!),
-                  )
+                  const moderations = slice.items.map(item => {
+                    const decision = moderatePost(item.post, moderationOpts!)
+                    // Debugging aid: log details when a post is hidden by a muted word/tag
+                    try {
+                      if (decision.causes.some(c => c.type === 'mute-word')) {
+                        const rec = item.record as AppBskyFeedPost.Record
+                        const langs = (rec as any)?.langs
+                        const text = (rec as any)?.text
+                        const facets = (rec as any)?.facets
+                        const tags = (rec as any)?.tags
+                        // Try to collect ALT text from image embeds on the record
+                        let altText = ''
+                        try {
+                          const emb: any = (rec as any)?.embed
+                          if (emb && emb.$type === 'app.bsky.embed.images') {
+                            const imgs: any[] = Array.isArray(emb.images)
+                              ? emb.images
+                              : []
+                            altText = imgs
+                              .map(img => (img && img.alt) || '')
+                              .filter(Boolean)
+                              .join(' \n ')
+                          }
+                        } catch {}
+
+                        const mutedWords =
+                          moderationOpts!.prefs.mutedWords || []
+                        const matchedWords: Array<{
+                          value: string
+                          targets: string[]
+                          actorTarget?: string
+                          expiresAt?: string
+                        }> = []
+                        for (const w of mutedWords) {
+                          try {
+                            const hit =
+                              hasMutedWord({
+                                mutedWords: [w],
+                                text,
+                                facets,
+                                outlineTags: tags,
+                                languages: langs,
+                                actor: item.post.author,
+                              }) ||
+                              // If not in text/facets/tags, try ALT text
+                              (altText
+                                ? hasMutedWord({
+                                    mutedWords: [w],
+                                    text: altText,
+                                    languages: langs,
+                                    actor: item.post.author,
+                                  })
+                                : false)
+                            if (hit) {
+                              matchedWords.push({
+                                value: (w as any).value,
+                                targets: (w as any).targets || [],
+                                actorTarget: (w as any).actorTarget,
+                                expiresAt: (w as any).expiresAt,
+                              })
+                            }
+                          } catch {}
+                        }
+
+                        console.debug('[mute-word]', {
+                          uri: item.post.uri,
+                          author: {
+                            did: item.post.author.did,
+                            handle: (item.post.author as any).handle,
+                          },
+                          langs,
+                          matchedWords,
+                          text,
+                          facets,
+                          tags,
+                          altText,
+                        })
+                      }
+                    } catch {}
+                    return decision
+                  })
 
                   // apply moderation filter
                   for (let i = 0; i < slice.items.length; i++) {
