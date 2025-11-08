@@ -79,7 +79,7 @@ function Inner({
         gtMobile ? {width: 'auto', maxWidth: 400, minWidth: 200} : a.w_full,
       ]}>
       <View style={[a.gap_sm, a.pb_lg]}>
-        <Text style={[a.text_2xl, a.font_bold, a.pr_4xl, a.leading_tight]}>
+        <Text style={[a.text_2xl, a.font_semi_bold, a.pr_4xl, a.leading_tight]}>
           {label}
         </Text>
         <Text style={[a.text_md, a.leading_snug]}>
@@ -147,7 +147,12 @@ function Inner({
         <Link
           overridePresentation
           to={urls.website.blog.initialVerificationAnnouncement}
-          label={_(msg`Learn more about verification on Bluesky`)}
+          label={_(
+            msg({
+              message: `Learn more about verification on Bluesky`,
+              context: `english-only-resource`,
+            }),
+          )}
           size="small"
           variant="solid"
           color="secondary"
@@ -162,7 +167,7 @@ function Inner({
             )
           }}>
           <ButtonText>
-            <Trans>Learn more</Trans>
+            <Trans context="english-only-resource">Learn more</Trans>
           </ButtonText>
         </Link>
       </View>
@@ -201,7 +206,7 @@ function VerifierCard({
               <ProfileCard.AvatarPlaceholder />
               <View style={[a.flex_1]}>
                 <Text
-                  style={[a.text_md, a.font_bold, a.leading_snug]}
+                  style={[a.text_md, a.font_semi_bold, a.leading_snug]}
                   numberOfLines={1}>
                   <Trans>Unknown verifier</Trans>
                 </Text>

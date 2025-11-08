@@ -42,7 +42,7 @@ export function useCleanError() {
         }
       }
 
-      if (raw.includes('Bad token scope')) {
+      if (raw.includes('Bad token scope') || raw.includes('Bad token method')) {
         return {
           raw,
           clean: _(
@@ -78,6 +78,7 @@ const NETWORK_ERRORS = [
   'Network request failed',
   'Failed to fetch',
   'Load failed',
+  'Upstream service unreachable',
 ]
 
 export function isNetworkError(e: unknown) {

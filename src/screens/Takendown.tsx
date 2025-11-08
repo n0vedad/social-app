@@ -9,7 +9,10 @@ import {useLingui} from '@lingui/react'
 import {useMutation} from '@tanstack/react-query'
 import Graphemer from 'graphemer'
 
-import {MAX_REPORT_REASON_GRAPHEME_LENGTH} from '#/lib/constants'
+import {
+  BLUESKY_MOD_SERVICE_HEADERS,
+  MAX_REPORT_REASON_GRAPHEME_LENGTH,
+} from '#/lib/constants'
 import {useEnableKeyboardController} from '#/lib/hooks/useEnableKeyboardController'
 import {cleanError} from '#/lib/strings/errors'
 import {isIOS, isWeb} from '#/platform/detection'
@@ -49,14 +52,20 @@ export function Takendown() {
   } = useMutation({
     mutationFn: async (appealText: string) => {
       if (!currentAccount) throw new Error('No session')
-      await agent.com.atproto.moderation.createReport({
-        reasonType: ComAtprotoModerationDefs.REASONAPPEAL,
-        subject: {
-          $type: 'com.atproto.admin.defs#repoRef',
-          did: currentAccount.did,
-        } satisfies ComAtprotoAdminDefs.RepoRef,
-        reason: appealText,
-      })
+      await agent.com.atproto.moderation.createReport(
+        {
+          reasonType: ComAtprotoModerationDefs.REASONAPPEAL,
+          subject: {
+            $type: 'com.atproto.admin.defs#repoRef',
+            did: currentAccount.did,
+          } satisfies ComAtprotoAdminDefs.RepoRef,
+          reason: appealText,
+        },
+        {
+          encoding: 'application/json',
+          headers: BLUESKY_MOD_SERVICE_HEADERS,
+        },
+      )
     },
     onSuccess: () => setReason(''),
   })
@@ -139,7 +148,7 @@ export function Takendown() {
               <Logo width={64} />
             </View>
 
-            <Text style={[a.text_4xl, a.font_heavy, a.pb_md]}>
+            <Text style={[a.text_4xl, a.font_bold, a.pb_md]}>
               {isAppealling ? (
                 <Trans>Appeal suspension</Trans>
               ) : (

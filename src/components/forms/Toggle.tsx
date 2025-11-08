@@ -1,12 +1,11 @@
 import React from 'react'
-import {Pressable, View, type ViewStyle} from 'react-native'
+import {Pressable, type StyleProp, View, type ViewStyle} from 'react-native'
 import Animated, {LinearTransition} from 'react-native-reanimated'
 
 import {HITSLOP_10} from '#/lib/constants'
 import {isNative} from '#/platform/detection'
 import {
   atoms as a,
-  flatten,
   native,
   type TextStyleProp,
   useTheme,
@@ -59,6 +58,7 @@ export type GroupProps = React.PropsWithChildren<{
   disabled?: boolean
   onChange: (value: string[]) => void
   label: string
+  style?: StyleProp<ViewStyle>
 }>
 
 export type ItemProps = ViewStyleProp & {
@@ -84,6 +84,7 @@ export function Group({
   type = 'checkbox',
   maxSelections,
   label,
+  style,
 }: GroupProps) {
   const groupRole = type === 'radio' ? 'radiogroup' : undefined
   const values = type === 'radio' ? providedValues.slice(0, 1) : providedValues
@@ -136,7 +137,7 @@ export function Group({
   return (
     <GroupContext.Provider value={context}>
       <View
-        style={[a.w_full]}
+        style={[a.w_full, style]}
         role={groupRole}
         {...(groupRole === 'radiogroup'
           ? {
@@ -231,7 +232,7 @@ export function Item({
         onPressOut={onPressOut}
         onFocus={onFocus}
         onBlur={onBlur}
-        style={[a.flex_row, a.align_center, a.gap_sm, flatten(style)]}>
+        style={[a.flex_row, a.align_center, a.gap_sm, style]}>
         {typeof children === 'function' ? children(state) : children}
       </Pressable>
     </ItemContext.Provider>
@@ -247,7 +248,7 @@ export function LabelText({
   return (
     <Text
       style={[
-        a.font_bold,
+        a.font_semi_bold,
         a.leading_tight,
         {
           userSelect: 'none',
@@ -258,7 +259,7 @@ export function LabelText({
         native({
           paddingTop: 2,
         }),
-        flatten(style),
+        style,
       ]}>
       {children}
     </Text>

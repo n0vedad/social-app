@@ -46,7 +46,12 @@ import {
   useProfileBlockMutationQueue,
   useProfileMuteMutationQueue,
 } from '#/state/queries/profile'
-import {useToggleReplyVisibilityMutation} from '#/state/queries/threadgate'
+import {
+  InvalidInteractionSettingsError,
+  MAX_HIDDEN_REPLIES,
+  MaxHiddenRepliesError,
+  useToggleReplyVisibilityMutation,
+} from '#/state/queries/threadgate'
 import {useRequireAuth, useSession} from '#/state/session'
 import {useMergedThreadgateHiddenReplies} from '#/state/threadgate-hidden-replies'
 import * as Toast from '#/view/com/util/Toast'
@@ -253,6 +258,7 @@ let PostMenuItems = ({
 
   const onHidePost = () => {
     hidePost({uri: postUri})
+    logEvent('thread:click:hideReplyForMe', {})
   }
 
   const hideInPWI = !!postAuthor.labels?.find(
@@ -266,7 +272,9 @@ let PostMenuItems = ({
       feedContext: postFeedContext,
       reqId: postReqId,
     })
-    Toast.show(_(msg({message: 'Feedback sent!', context: 'toast'})))
+    Toast.show(
+      _(msg({message: 'Feedback sent to feed operator', context: 'toast'})),
+    )
   }
 
   const onPressShowLess = () => {
@@ -282,7 +290,9 @@ let PostMenuItems = ({
         feedContext: postFeedContext,
       })
     } else {
-      Toast.show(_(msg({message: 'Feedback sent!', context: 'toast'})))
+      Toast.show(
+        _(msg({message: 'Feedback sent to feed operator', context: 'toast'})),
+      )
     }
   }
 
@@ -329,16 +339,42 @@ let PostMenuItems = ({
         replyUri: postUri,
         action,
       })
+
+      // Log metric only when hiding (not when showing)
+      if (isHide) {
+        logEvent('thread:click:hideReplyForEveryone', {})
+      }
+
       Toast.show(
         isHide
           ? _(msg`Reply was successfully hidden`)
           : _(msg({message: 'Reply visibility updated', context: 'toast'})),
       )
     } catch (e: any) {
-      Toast.show(
-        _(msg({message: 'Updating reply visibility failed', context: 'toast'})),
-      )
-      logger.error(`Failed to ${action} reply`, {safeMessage: e.message})
+      if (e instanceof MaxHiddenRepliesError) {
+        Toast.show(
+          _(
+            msg({
+              message: `You can hide a maximum of ${MAX_HIDDEN_REPLIES} replies.`,
+              context: 'toast',
+            }),
+          ),
+        )
+      } else if (e instanceof InvalidInteractionSettingsError) {
+        Toast.show(
+          _(msg({message: 'Invalid interaction settings.', context: 'toast'})),
+        )
+      } else {
+        Toast.show(
+          _(
+            msg({
+              message: 'Updating reply visibility failed',
+              context: 'toast',
+            }),
+          ),
+        )
+        logger.error(`Failed to ${action} reply`, {safeMessage: e.message})
+      }
     }
   }
 
@@ -486,13 +522,16 @@ let PostMenuItems = ({
         )}
 
         {isDiscoverDebugUser && (
-          <Menu.Item
-            testID="postDropdownReportMisclassificationBtn"
-            label={_(msg`Assign topic for algo`)}
-            onPress={onReportMisclassification}>
-            <Menu.ItemText>{_(msg`Assign topic for algo`)}</Menu.ItemText>
-            <Menu.ItemIcon icon={AtomIcon} position="right" />
-          </Menu.Item>
+          <>
+            <Menu.Divider />
+            <Menu.Item
+              testID="postDropdownReportMisclassificationBtn"
+              label={_(msg`Assign topic for algo`)}
+              onPress={onReportMisclassification}>
+              <Menu.ItemText>{_(msg`Assign topic for algo`)}</Menu.ItemText>
+              <Menu.ItemIcon icon={AtomIcon} position="right" />
+            </Menu.Item>
+          </>
         )}
 
         {hasSession && (

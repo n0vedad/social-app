@@ -209,9 +209,14 @@ function ProvidedHandlePage({
                 You are verified. You will lose your verification status if you
                 change your handle.{' '}
                 <InlineLinkText
-                  label={_(msg`Learn more`)}
+                  label={_(
+                    msg({
+                      message: `Learn more`,
+                      context: `english-only-resource`,
+                    }),
+                  )}
                   to={urls.website.blog.initialVerificationAnnouncement}>
-                  <Trans>Learn more.</Trans>
+                  <Trans context="english-only-resource">Learn more.</Trans>
                 </InlineLinkText>
               </Trans>
             </Admonition>
@@ -239,7 +244,7 @@ function ProvidedHandlePage({
           <Text>
             <Trans>
               Your full handle will be{' '}
-              <Text style={[a.font_bold]}>
+              <Text style={[a.font_semi_bold]}>
                 @{createFullHandle(subdomain, host)}
               </Text>
             </Trans>
@@ -268,9 +273,14 @@ function ProvidedHandlePage({
               If you have your own domain, you can use that as your handle. This
               lets you self-verify your identity.{' '}
               <InlineLinkText
-                label={_(msg`learn more`)}
+                label={_(
+                  msg({
+                    message: `Learn more`,
+                    context: `english-only-resource`,
+                  }),
+                )}
                 to="https://bsky.social/about/blog/4-28-2023-domain-handle-tutorial"
-                style={[a.font_bold]}
+                style={[a.font_semi_bold]}
                 disableMismatchWarning>
                 Learn more here.
               </InlineLinkText>
@@ -418,10 +428,10 @@ function OwnHandlePage({goToServiceHandle}: {goToServiceHandle: () => void}) {
               </Text>
               <View style={[a.py_xs]}>
                 <CopyButton
-                  variant="solid"
                   color="secondary"
                   value="_atproto"
                   label={_(msg`Copy host`)}
+                  style={[a.bg_transparent]}
                   hoverStyle={[a.bg_transparent]}
                   hitSlop={HITSLOP_10}>
                   <Text style={[a.text_md, a.flex_1]}>_atproto</Text>
@@ -439,10 +449,10 @@ function OwnHandlePage({goToServiceHandle}: {goToServiceHandle: () => void}) {
               </Text>
               <View style={[a.py_xs]}>
                 <CopyButton
-                  variant="solid"
                   color="secondary"
                   value={'did=' + currentAccount?.did}
                   label={_(msg`Copy TXT record value`)}
+                  style={[a.bg_transparent]}
                   hoverStyle={[a.bg_transparent]}
                   hitSlop={HITSLOP_10}>
                   <Text style={[a.text_md, a.flex_1]}>
@@ -512,7 +522,7 @@ function OwnHandlePage({goToServiceHandle}: {goToServiceHandle: () => void}) {
           <Admonition type="info" style={[a.mb_md]}>
             <Trans>
               Your current handle{' '}
-              <Text style={[a.font_bold]}>
+              <Text style={[a.font_semi_bold]}>
                 {sanitizeHandle(currentAccount?.handle || '', '@')}
               </Text>{' '}
               will automatically remain reserved for you. You can switch back to
@@ -626,7 +636,7 @@ function SuccessMessage({text}: {text: string}) {
           a.rounded_full,
           a.align_center,
           a.justify_center,
-          {backgroundColor: t.palette.positive_600},
+          {backgroundColor: t.palette.positive_500},
         ]}>
         <CheckIcon fill={t.palette.white} size="xs" />
       </View>

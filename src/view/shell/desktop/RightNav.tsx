@@ -65,6 +65,7 @@ export function DesktopRightNav({routeName}: {routeName: string}) {
       style={[
         gutters,
         a.gap_lg,
+        a.pr_2xs,
         web({
           position: 'fixed',
           left: '50%',
@@ -74,9 +75,11 @@ export function DesktopRightNav({routeName}: {routeName: string}) {
             },
             ...a.scrollbar_offset.transform,
           ],
-          width: width + gutters.paddingLeft,
-          maxHeight: '100%',
-          overflowY: 'auto',
+          /**
+           * Compensate for the right padding above (2px) to retain intended width.
+           */
+          width: width + gutters.paddingLeft + 2,
+          maxHeight: '100vh',
         }),
       ]}>
       {!isSearchScreen && <DesktopSearch />}

@@ -53,7 +53,7 @@ function Inner() {
             style={[
               a.flex_1,
               a.text_sm,
-              a.font_bold,
+              a.font_semi_bold,
               t.atoms.text_contrast_medium,
             ]}>
             <Trans>Trending</Trans>
@@ -82,6 +82,7 @@ function Inner() {
                 <TrendingTopicLink
                   key={topic.link}
                   topic={topic}
+                  style={a.rounded_full}
                   onPress={() => {
                     logEvent('trendingTopic:click', {context: 'sidebar'})
                   }}>

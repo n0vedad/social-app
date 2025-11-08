@@ -6,6 +6,7 @@ import {
   type AppBskyFeedPost,
   AtUri,
   type BskyAgent,
+  hasMutedWord,
   moderatePost,
   type ModerationDecision,
   type ModerationPrefs,
@@ -30,7 +31,6 @@ import {type FeedAPI, type ReasonFeedSource} from '#/lib/api/feed/types'
 import {aggregateUserInterests} from '#/lib/api/feed/utils'
 import {FeedTuner, type FeedTunerFn} from '#/lib/api/feed-manip'
 import {DISCOVER_FEED_URI} from '#/lib/constants'
-import {BSKY_FEED_OWNER_DIDS} from '#/lib/constants'
 import {logger} from '#/logger'
 import {useAgeAssuranceContext} from '#/state/ageAssurance'
 import {STALE} from '#/state/queries'
@@ -208,44 +208,27 @@ export function usePostFeedQuery(
             cursor: undefined,
           }
 
-      try {
-        const res = await api.fetch({cursor, limit: fetchLimit})
+      const res = await api.fetch({cursor, limit: fetchLimit})
 
-        /*
-         * If this is a public view, we need to check if posts fail moderation.
-         * If all fail, we throw an error. If only some fail, we continue and let
-         * moderations happen later, which results in some posts being shown and
-         * some not.
-         */
-        if (!agent.session) {
-          assertSomePostsPassModeration(
-            res.feed,
-            preferences?.moderationPrefs ||
-              DEFAULT_LOGGED_OUT_PREFERENCES.moderationPrefs,
-          )
-        }
+      /*
+       * If this is a public view, we need to check if posts fail moderation.
+       * If all fail, we throw an error. If only some fail, we continue and let
+       * moderations happen later, which results in some posts being shown and
+       * some not.
+       */
+      if (!agent.session) {
+        assertSomePostsPassModeration(
+          res.feed,
+          preferences?.moderationPrefs ||
+            DEFAULT_LOGGED_OUT_PREFERENCES.moderationPrefs,
+        )
+      }
 
-        return {
-          api,
-          cursor: res.cursor,
-          feed: res.feed,
-          fetchedAt: Date.now(),
-        }
-      } catch (e) {
-        const feedDescParts = feedDesc.split('|')
-        const feedOwnerDid = new AtUri(feedDescParts[1]).hostname
-
-        if (
-          feedDescParts[0] === 'feedgen' &&
-          BSKY_FEED_OWNER_DIDS.includes(feedOwnerDid)
-        ) {
-          logger.error(`Bluesky feed may be offline: ${feedOwnerDid}`, {
-            feedDesc,
-            jsError: e,
-          })
-        }
-
-        throw e
+      return {
+        api,
+        cursor: res.cursor,
+        feed: res.feed,
+        fetchedAt: Date.now(),
       }
     },
     initialPageParam: undefined,
@@ -310,9 +293,87 @@ export function usePostFeedQuery(
               slices: tuner
                 .tune(page.feed)
                 .map(slice => {
-                  const moderations = slice.items.map(item =>
-                    moderatePost(item.post, moderationOpts!),
-                  )
+                  const moderations = slice.items.map(item => {
+                    const decision = moderatePost(item.post, moderationOpts!)
+                    // Debugging aid: log details when a post is hidden by a muted word/tag
+                    try {
+                      if (decision.causes.some(c => c.type === 'mute-word')) {
+                        const rec = item.record as AppBskyFeedPost.Record
+                        const langs = (rec as any)?.langs
+                        const text = (rec as any)?.text
+                        const facets = (rec as any)?.facets
+                        const tags = (rec as any)?.tags
+                        // Try to collect ALT text from image embeds on the record
+                        let altText = ''
+                        try {
+                          const emb: any = (rec as any)?.embed
+                          if (emb && emb.$type === 'app.bsky.embed.images') {
+                            const imgs: any[] = Array.isArray(emb.images)
+                              ? emb.images
+                              : []
+                            altText = imgs
+                              .map(img => (img && img.alt) || '')
+                              .filter(Boolean)
+                              .join(' \n ')
+                          }
+                        } catch {}
+
+                        const mutedWords =
+                          moderationOpts!.prefs.mutedWords || []
+                        const matchedWords: Array<{
+                          value: string
+                          targets: string[]
+                          actorTarget?: string
+                          expiresAt?: string
+                        }> = []
+                        for (const w of mutedWords) {
+                          try {
+                            const hit =
+                              hasMutedWord({
+                                mutedWords: [w],
+                                text,
+                                facets,
+                                outlineTags: tags,
+                                languages: langs,
+                                actor: item.post.author,
+                              }) ||
+                              // If not in text/facets/tags, try ALT text
+                              (altText
+                                ? hasMutedWord({
+                                    mutedWords: [w],
+                                    text: altText,
+                                    languages: langs,
+                                    actor: item.post.author,
+                                  })
+                                : false)
+                            if (hit) {
+                              matchedWords.push({
+                                value: (w as any).value,
+                                targets: (w as any).targets || [],
+                                actorTarget: (w as any).actorTarget,
+                                expiresAt: (w as any).expiresAt,
+                              })
+                            }
+                          } catch {}
+                        }
+
+                        console.debug('[mute-word]', {
+                          uri: item.post.uri,
+                          author: {
+                            did: item.post.author.did,
+                            handle: (item.post.author as any).handle,
+                          },
+                          langs,
+                          matchedWords,
+                          text,
+                          facets,
+                          tags,
+                          altText,
+                        })
+                      }
+                    } catch {}
+                    return decision
+                  })
 
                   // apply moderation filter
                   for (let i = 0; i < slice.items.length; i++) {
@@ -492,23 +553,23 @@ function createApi({
       }
     }
   } else if (feedDesc.startsWith('author')) {
-    const [_, actor, filter] = feedDesc.split('|')
+    const [__, actor, filter] = feedDesc.split('|')
     return new AuthorFeedAPI({agent, feedParams: {actor, filter}})
   } else if (feedDesc.startsWith('likes')) {
-    const [_, actor] = feedDesc.split('|')
+    const [__, actor] = feedDesc.split('|')
     return new LikesFeedAPI({agent, feedParams: {actor}})
   } else if (feedDesc.startsWith('feedgen')) {
-    const [_, feed] = feedDesc.split('|')
+    const [__, feed] = feedDesc.split('|')
     return new CustomFeedAPI({
       agent,
       feedParams: {feed},
       userInterests,
     })
   } else if (feedDesc.startsWith('list')) {
-    const [_, list] = feedDesc.split('|')
+    const [__, list] = feedDesc.split('|')
     return new ListFeedAPI({agent, feedParams: {list}})
   } else if (feedDesc.startsWith('posts')) {
-    const [_, uriList] = feedDesc.split('|')
+    const [__, uriList] = feedDesc.split('|')
     return new PostListFeedAPI({agent, feedParams: {uris: uriList.split(',')}})
   } else if (feedDesc === 'demo') {
     return new DemoFeedAPI({agent})

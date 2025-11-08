@@ -7,10 +7,12 @@ import debounce from 'lodash.debounce'
 
 import {PUBLIC_APPVIEW_DID, PUBLIC_STAGING_APPVIEW_DID} from '#/lib/constants'
 import {logger as notyLogger} from '#/lib/notifications/util'
+import {isNetworkError} from '#/lib/strings/errors'
 import {isNative} from '#/platform/detection'
 import {useAgeAssuranceContext} from '#/state/ageAssurance'
 import {type SessionAccount, useAgent, useSession} from '#/state/session'
 import BackgroundNotificationHandler from '#/../modules/expo-background-notification-handler'
+import {IS_DEV} from '#/env'
 
 /**
  * @private
@@ -46,7 +48,9 @@ async function _registerPushToken({
 
     notyLogger.debug(`registerPushToken: success`)
   } catch (error) {
-    notyLogger.error(`registerPushToken: failed`, {safeMessage: error})
+    if (!isNetworkError(error)) {
+      notyLogger.error(`registerPushToken: failed`, {safeMessage: error})
+    }
   }
 }
 
@@ -129,7 +133,7 @@ export function useGetAndRegisterPushToken() {
     }: {
       isAgeRestricted?: boolean
     } = {}) => {
-      if (!isNative) return
+      if (!isNative || IS_DEV) return
 
       /**
        * This will also fire the listener added via `addPushTokenListener`. That

@@ -4,6 +4,7 @@ import {
   type AppBskyFeedDefs,
   AppBskyFeedPost,
   AtUri,
+  hasMutedWord,
   moderatePost,
   type ModerationDecision,
   RichText as RichTextAPI,
@@ -35,7 +36,7 @@ import {PostRepliedTo} from '#/components/Post/PostRepliedTo'
 import {ShowMoreTextButton} from '#/components/Post/ShowMoreTextButton'
 import {PostControls} from '#/components/PostControls'
 import {RichText} from '#/components/RichText'
-import {SubtleWebHover} from '#/components/SubtleWebHover'
+import {SubtleHover} from '#/components/SubtleHover'
 import * as bsky from '#/types/bsky'
 
 export function Post({
@@ -43,11 +44,13 @@ export function Post({
   showReplyLine,
   hideTopBorder,
   style,
+  onBeforePress,
 }: {
   post: AppBskyFeedDefs.PostView
   showReplyLine?: boolean
   hideTopBorder?: boolean
   style?: StyleProp<ViewStyle>
+  onBeforePress?: () => void
 }) {
   const moderationOpts = useModerationOpts()
   const record = useMemo<AppBskyFeedPost.Record | undefined>(
@@ -72,6 +75,75 @@ export function Post({
     () => (moderationOpts ? moderatePost(post, moderationOpts) : undefined),
     [moderationOpts, post],
   )
+  // Debug: log when a post is hidden/blurred due to a muted word/tag in the single Post component
+  try {
+    if (moderation && moderation.causes.some(c => c.type === 'mute-word')) {
+      const rec: any = record
+      const langs = rec?.langs
+      const text = rec?.text
+      const facets = rec?.facets
+      const tags = rec?.tags
+      // Collect ALT text from image embeds
+      let altText = ''
+      try {
+        const emb: any = rec?.embed
+        if (emb && emb.$type === 'app.bsky.embed.images') {
+          const imgs: any[] = Array.isArray(emb.images) ? emb.images : []
+          altText = imgs
+            .map(img => (img && img.alt) || '')
+            .filter(Boolean)
+            .join(' \n ')
+        }
+      } catch {}
+      const mutedWords = moderationOpts?.prefs.mutedWords || []
+      const matchedWords: Array<{
+        value: string
+        targets: string[]
+        actorTarget?: string
+        expiresAt?: string
+      }> = []
+      for (const w of mutedWords) {
+        try {
+          const hit =
+            hasMutedWord({
+              mutedWords: [w],
+              text,
+              facets,
+              outlineTags: tags,
+              languages: langs,
+              actor: post.author,
+            }) ||
+            (altText
+              ? hasMutedWord({
+                  mutedWords: [w],
+                  text: altText,
+                  languages: langs,
+                  actor: post.author,
+                })
+              : false)
+          if (hit) {
+            matchedWords.push({
+              value: (w as any).value,
+              targets: (w as any).targets || [],
+              actorTarget: (w as any).actorTarget,
+              expiresAt: (w as any).expiresAt,
+            })
+          }
+        } catch {}
+      }
+
+      console.debug('[mute-word][post]', {
+        uri: post.uri,
+        author: {did: post.author.did, handle: (post.author as any).handle},
+        langs,
+        matchedWords,
+        text,
+        facets,
+        tags,
+        altText,
+      })
+    }
+  } catch {}
   if (postShadowed === POST_TOMBSTONE) {
     return null
   }
@@ -85,6 +157,7 @@ export function Post({
         showReplyLine={showReplyLine}
         hideTopBorder={hideTopBorder}
         style={style}
+        onBeforePress={onBeforePress}
       />
     )
   }
@@ -99,6 +172,7 @@ function PostInner({
   showReplyLine,
   hideTopBorder,
   style,
+  onBeforePress: outerOnBeforePress,
 }: {
   post: Shadow<AppBskyFeedDefs.PostView>
   record: AppBskyFeedPost.Record
@@ -107,6 +181,7 @@ function PostInner({
   showReplyLine?: boolean
   hideTopBorder?: boolean
   style?: StyleProp<ViewStyle>
+  onBeforePress?: () => void
 }) {
   const queryClient = useQueryClient()
   const pal = usePalette('default')
@@ -142,7 +217,8 @@ function PostInner({
 
   const onBeforePress = useCallback(() => {
     unstableCacheProfileView(queryClient, post.author)
-  }, [queryClient, post.author])
+    outerOnBeforePress?.()
+  }, [queryClient, post.author, outerOnBeforePress])
 
   const [hover, setHover] = useState(false)
   return (
@@ -161,7 +237,7 @@ function PostInner({
       onPointerLeave={() => {
         setHover(false)
       }}>
-      <SubtleWebHover hover={hover} />
+      <SubtleHover hover={hover} />
       {showReplyLine && <View style={styles.replyLine} />}
       <View style={styles.layout}>
         <View style={styles.layoutAvi}>
@@ -189,7 +265,7 @@ function PostInner({
             childContainerStyle={styles.contentHiderChild}>
             <PostAlerts
               modui={moderation.ui('contentView')}
-              style={[a.py_xs]}
+              style={[a.pb_xs]}
             />
             {richText.text ? (
               <View>
