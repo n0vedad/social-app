@@ -245,15 +245,34 @@ export async function compressImage(img: ComposerImage): Promise<PickerImage> {
 async function moveIfNecessary(from: string) {
   const cacheDir = isNative && getImageCacheDirectory()
 
-  if (cacheDir && from.startsWith(cacheDir)) {
+  console.log('[moveIfNecessary] DEBUG START')
+  console.log('[moveIfNecessary] from:', from)
+  console.log('[moveIfNecessary] cacheDir:', cacheDir)
+  console.log(
+    '[moveIfNecessary] from.startsWith(cacheDir):',
+    from.startsWith(cacheDir || ''),
+  )
+  console.log(
+    '[moveIfNecessary] !from.startsWith(cacheDir):',
+    !from.startsWith(cacheDir || ''),
+  )
+
+  // FIX: Move files that are NOT already in bsky-composer cache
+  if (cacheDir && !from.startsWith(cacheDir)) {
+    console.log('[moveIfNecessary] ✅ CONDITION TRUE - File will be MOVED')
     const to = joinPath(cacheDir, nanoid(36))
+    console.log('[moveIfNecessary] to:', to)
 
     await makeDirectoryAsync(cacheDir, {intermediates: true})
     await moveAsync({from, to})
 
+    console.log('[moveIfNecessary] ✅ File successfully moved')
+    console.log('[moveIfNecessary] DEBUG END - returning new path')
     return to
   }
 
+  console.log('[moveIfNecessary] ❌ CONDITION FALSE - File will NOT be moved')
+  console.log('[moveIfNecessary] DEBUG END - returning original path')
   return from
 }
 
